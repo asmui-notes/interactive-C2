@@ -857,11 +857,12 @@ F_future  <span class="kw">&lt;-</span> T_future * SI_future    <span class="cm"
   <div class="formula">MSE = (1/n) &Sigma; (y<sub>t</sub> &minus; F<sub>t</sub>)&sup2; = (1/n) &Sigma; e<sub>t</sub>&sup2;</div>
   <p>The tricky part is <strong>n</strong> - how many squared errors you actually have. Not every row produces one.</p>
 
-  <h3>The rules</h3>
+  <h3>The rules (calculating by hand)</h3>
   <div class="step"><div class="no">1</div><div>Form the error <code>e<sub>t</sub> = y<sub>t</sub> &minus; F<sub>t</sub></code> <strong>only on rows that have a forecast</strong>.</div></div>
   <div class="step"><div class="no">2</div><div><strong>Skip rows with no forecast.</strong> Early periods that lack enough history are blank - e.g. Average Change needs two past changes, so its first few rows have no F<sub>t</sub>.</div></div>
   <div class="step"><div class="no">3</div><div><strong>Skip the initialisation seed.</strong> In SES and ARRES the first value <code>F<sub>1</sub> = y<sub>1</sub></code> is a seed, not a real forecast, so its error is not counted.</div></div>
   <div class="step"><div class="no">4</div><div>Set <strong>n = the number of valid squared errors</strong> and divide by that n - <em>not</em> by the total sample size.</div></div>
+  <div class="note"><strong>In R it's different:</strong> <code>ses()</code>, <code>holt()</code> and <code>hw()</code> <strong>estimate (optimise) the initial values</strong> instead of seeding <code>F&#8321; = y&#8321;</code>, so they produce a residual for <em>every</em> period and average MSE over <strong>all n observations</strong> - a different period from the by-hand count, so R's MSE won't match yours exactly.</div>
 
   <h3>n for each method - annual price example (6 observations, 2018&ndash;2023)</h3>
   <div class="ssbox"><table class="ss">
@@ -874,10 +875,11 @@ F_future  <span class="kw">&lt;-</span> T_future * SI_future    <span class="cm"
     <tr><td>DES</td><td>2019</td><td>1</td><td class="fx">5</td></tr>
     <tr><td>Holt's</td><td>2019</td><td>1</td><td class="fx">5</td></tr>
     <tr><td>ARRES</td><td>2019</td><td>1 (seed excluded)</td><td class="fx">5</td></tr>
-    <tr><td>Holt-Winters *</td><td>quarterly data</td><td>0</td><td class="fx">8</td></tr>
+    <tr><td>Holt-Winters *</td><td>2023 Q1 (year 2)</td><td>4 (first season initialises)</td><td class="fx">4</td></tr>
   </table></div>
+  <p class="small">* By hand, Holt-Winters uses the whole first season (4 quarters) to initialise and only forecasts from year 2, so <strong>n = 4</strong>. R's <code>hw()</code> reports <strong>n = 8</strong> because it estimates the initial states and scores every quarter (see the note above).</p>
 
-  <div class="warn"><strong>Fair comparison rule:</strong> only compare MSE values computed on the <strong>same series over the same periods</strong>. Holt-Winters (marked *) needs seasonal data, so it runs on a different quarterly set (n = 8) - its MSE is <strong>not</strong> directly comparable with the annual methods.</div>
+  <div class="warn"><strong>Fair comparison rule:</strong> only compare MSE values computed on the <strong>same series over the same periods</strong>. Holt-Winters (marked *) needs seasonal data, so it runs on a different quarterly set (by hand n = 4) - its MSE is <strong>not</strong> directly comparable with the annual methods.</div>
   <div class="note">In Excel the divisor is handled for you: <code>=AVERAGE(D4:D7)</code> averages only the range you point at, so pick the range that starts at the <strong>first valid error</strong> row. In R, use <code>mean(e2, na.rm = TRUE)</code> to drop the NA rows automatically.</div>
 `},
 
