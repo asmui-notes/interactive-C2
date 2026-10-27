@@ -828,10 +828,11 @@ d$figure            <span class="cm"># the 12 unique monthly seasonal indices</s
 cpi   <span class="kw">&lt;-</span> <span class="fn">read.csv</span>(<span class="st">"data/CPI Malaysia.csv"</span>, check.names = <span class="kw">FALSE</span>)
 cpits <span class="kw">&lt;-</span> <span class="fn">ts</span>(cpi$<span class="st">\`Consumer price index (2010 = 100)\`</span>, start = <span class="nm">1960</span>, frequency = <span class="nm">1</span>)
 
-<span class="cm"># Train / test split</span>
+<span class="cm"># Train / test split - 80% estimation, 20% evaluation</span>
 n       <span class="kw">&lt;-</span> <span class="fn">length</span>(cpits)
-est_part <span class="kw">&lt;-</span> <span class="fn">head</span>(cpits, <span class="nm">50</span>)        <span class="cm"># first 50 obs = estimation</span>
-eva_part <span class="kw">&lt;-</span> <span class="fn">tail</span>(cpits, n - <span class="nm">50</span>)   <span class="cm"># remainder = evaluation</span></pre></div>
+n_est   <span class="kw">&lt;-</span> <span class="fn">floor</span>(<span class="nm">0.8</span> * n)             <span class="cm"># 80% of the observations</span>
+est_part <span class="kw">&lt;-</span> <span class="fn">head</span>(cpits, n_est)         <span class="cm"># first 80% = estimation</span>
+eva_part <span class="kw">&lt;-</span> <span class="fn">tail</span>(cpits, n - n_est)     <span class="cm"># last 20% = evaluation</span></pre></div>
   <div class="note">A monthly series uses <code>frequency = 12</code>; quarterly uses <code>frequency = 4</code>. The frequency is what tells R where the <em>seasons</em> are.</div>
 `},
 
@@ -839,26 +840,27 @@ eva_part <span class="kw">&lt;-</span> <span class="fn">tail</span>(cpits, n - <
   <span class="tag" style="background:#e5e3fb;color:#3730a3">R demo</span>
   <h2>&#128200; SES &amp; Holt&rsquo;s method in R</h2>
   <h3>Single Exponential Smoothing - <code>ses()</code></h3>
-  <div class="rbox"><div class="rbar">R script</div><pre><span class="cm"># Fit on the estimation set (R picks the optimal alpha)</span>
-SE_est <span class="kw">&lt;-</span> <span class="fn">ses</span>(est_part)
+  <div class="rbox"><div class="rbar">R script</div><pre><span class="cm"># Fit on the estimation set; forecast across the hold-out horizon</span>
+SE_est <span class="kw">&lt;-</span> <span class="fn">ses</span>(est_part, h = <span class="fn">length</span>(eva_part))
 <span class="fn">summary</span>(SE_est)
 
-<span class="cm"># Forecast 5 years ahead with a chosen alpha, and plot</span>
+<span class="cm"># Out-of-sample error: forecasts vs the actual hold-out values</span>
+<span class="fn">accuracy</span>(SE_est, eva_part)   <span class="cm"># read the "Test set" row</span>
+
+<span class="cm"># Forecast 5 years ahead on the full series, and plot</span>
 <span class="fn">autoplot</span>(cpits) +
-  <span class="fn">autolayer</span>(<span class="fn">forecast</span>(<span class="fn">ses</span>(cpits, alpha = <span class="nm">0.999</span>), h = <span class="nm">5</span>),
+  <span class="fn">autolayer</span>(<span class="fn">forecast</span>(<span class="fn">ses</span>(cpits), h = <span class="nm">5</span>),
             series = <span class="st">"SES Forecast"</span>, PI = <span class="kw">TRUE</span>) +
   <span class="fn">ylab</span>(<span class="st">"CPI (2010 = 100)"</span>) + <span class="fn">xlab</span>(<span class="st">"Year"</span>)</pre></div>
-  <div class="rout">Smoothing parameters:
-  alpha = 0.9999
-Initial states:  l = 24.13
-sigma:  1.42
-     AIC     AICc      BIC
-  ...      ...      ...</div>
+  <div class="note"><code>accuracy(SE_est, eva_part)</code> prints a <strong>Training set</strong> row (in-sample, from <code>est_part</code>) and a <strong>Test set</strong> row - the Test-set RMSE / MAE / MAPE is the <strong>out-of-sample</strong> error. Do <em>not</em> refit with <code>ses(eva_part)</code>: that would fit a new model on the hold-out data and report in-sample error instead.</div>
 
   <h3>Holt&rsquo;s method - <code>holt()</code></h3>
   <div class="rbox"><div class="rbar">R script</div><pre><span class="cm"># Two constants: alpha (level) and beta (trend)</span>
-Holt_est <span class="kw">&lt;-</span> <span class="fn">holt</span>(est_part)
+Holt_est <span class="kw">&lt;-</span> <span class="fn">holt</span>(est_part, h = <span class="fn">length</span>(eva_part))
 <span class="fn">summary</span>(Holt_est)
+
+<span class="cm"># Out-of-sample error: forecasts vs the actual hold-out values</span>
+<span class="fn">accuracy</span>(Holt_est, eva_part)   <span class="cm"># read the "Test set" row</span>
 
 <span class="fn">autoplot</span>(cpits) +
   <span class="fn">autolayer</span>(<span class="fn">forecast</span>(<span class="fn">holt</span>(cpits, alpha = <span class="nm">0.9922</span>, beta = <span class="nm">0.3708</span>), h = <span class="nm">5</span>),
@@ -874,12 +876,18 @@ Holt_est <span class="kw">&lt;-</span> <span class="fn">holt</span>(est_part)
   <div class="rbox"><div class="rbar">R script</div><pre><span class="cm"># Monthly electricity series (frequency = 12 -&gt; seasonal)</span>
 electricts <span class="kw">&lt;-</span> <span class="fn">ts</span>(electric$electric, start = <span class="fn">c</span>(<span class="nm">2015</span>, <span class="nm">1</span>), frequency = <span class="nm">12</span>)
 
-HW_fit <span class="kw">&lt;-</span> <span class="fn">hw</span>(electricts, seasonal = <span class="st">"additive"</span>,
-             alpha = <span class="nm">0.9522</span>, beta = <span class="nm">0.0002</span>, gamma = <span class="nm">0.0008</span>)
+<span class="cm"># Let R estimate alpha, beta, gamma by minimising SSE</span>
+HW_fit <span class="kw">&lt;-</span> <span class="fn">hw</span>(electricts, seasonal = <span class="st">"additive"</span>)
+<span class="fn">summary</span>(HW_fit)   <span class="cm"># shows the fitted alpha, beta, gamma</span>
 
 <span class="fn">autoplot</span>(electricts) +
   <span class="fn">autolayer</span>(<span class="fn">forecast</span>(HW_fit, h = <span class="nm">12</span>), series = <span class="st">"HW Forecast"</span>, PI = <span class="kw">TRUE</span>) +
-  <span class="fn">ylab</span>(<span class="st">"Output Index"</span>)</pre></div>
+  <span class="fn">ylab</span>(<span class="st">"Output Index"</span>)
+
+<span class="cm"># Only to reproduce a specific result: supply the values by hand</span>
+<span class="cm"># HW_fix &lt;- hw(electricts, seasonal = "additive",</span>
+<span class="cm">#             alpha = 0.9522, beta = 0.0002, gamma = 0.0008)</span></pre></div>
+  <div class="note"><strong>Do not choose &alpha;, &beta;, &gamma; subjectively.</strong> Omit them and <code>hw()</code> estimates them for you (minimising SSE); read them off <code>summary()</code>. Supply them by hand only to reproduce a specific textbook result or to illustrate a chosen value - and say so in the write-up.</div>
   <p class="small">Use <code>seasonal = "multiplicative"</code> when the seasonal swings <em>grow</em> with the level of the series.</p>
 
   <h3>Decomposition forecast - <code>decompose()</code></h3>
